@@ -1,0 +1,7 @@
+torch==2.14.0
+torchvision==0.29.0
+mss==10.2.0
+pygame-ce==2.5.8
+PyGetWindow==0.0.9
+Pillow==12.3.0
+vgamepad==0.1.0
