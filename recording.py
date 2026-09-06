@@ -6,8 +6,19 @@ import pygame
 import pygetwindow as gw
 from PIL import Image
 
-OUT = Path("dataset/run_001")
+OUT_ROOT = Path("dataset")
+existing = []
+if OUT_ROOT.exists():
+    for p in OUT_ROOT.iterdir():
+        if p.is_dir() and p.name.startswith("run_"):
+            try:
+                existing.append(int(p.name.split("_", 1)[1]))
+            except ValueError:
+                pass
+next_run = (max(existing) + 1) if existing else 1
+OUT = OUT_ROOT / f"run_{next_run:03d}"
 (OUT / "frames").mkdir(parents=True, exist_ok=True)
+print("Writing to", OUT)
 
 WINDOW_TITLE = "Eden | v0.2.1 | Clang 22.1.4 | Mario Kart 8 Deluxe (64-bit) | 3.0.5 | Nvidia"
 wins = gw.getWindowsWithTitle(WINDOW_TITLE)
