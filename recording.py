@@ -69,8 +69,9 @@ with (OUT / "labels.csv").open("w", newline="") as f:
             if joy.get_button(ARM_BTN):
                 break
             steer = joy.get_axis(0)          # left stick X
-            throttle = 1 if joy.get_button(1) else 0  # A on many Pro mappings
-            drift = 1 if joy.get_button(7) else 0      # R / ZR — check yours
+            throttle = 1 if joy.get_button(0) else 0  # A
+            # axis 4 = LT, axis 5 = RT; Switch triggers are digital — treat as pressed/not
+            drift = 1 if joy.get_axis(5) > 0 else 0
 
             raw = sct.grab(MONITOR)
             img = Image.frombytes("RGB", raw.size, raw.bgra, "raw", "BGRX")
@@ -80,7 +81,7 @@ with (OUT / "labels.csv").open("w", newline="") as f:
             w.writerow([idx, f"{time.time()-t0:.4f}", f"{steer:.4f}", throttle, drift])
             if idx % 50 == 0:
                 f.flush()
-                print(idx, f"steer={steer:+.2f}")
+                print(idx, f"steer={steer:+.2f} drift={drift}")
             idx += 1
 
             next_t += DT
