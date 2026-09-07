@@ -1,3 +1,4 @@
+import csv
 import math
 import time
 from pathlib import Path
@@ -34,6 +35,23 @@ IMG_SIZE = (66, 200)
 HZ = 15
 WEIGHTS = Path("pilot_best.pt")
 ARM_BTN = 7  # left stick click (L3); same as recording.py
+TAKEOVER_BTN = 10  # right bumper (R); hold to override the model
+OUT_ROOT = Path("dataset")
+
+
+def next_dagger_dir() -> Path:
+    existing = []
+    if OUT_ROOT.exists():
+        for path in OUT_ROOT.iterdir():
+            if path.is_dir() and path.name.startswith("dagger_"):
+                try:
+                    existing.append(int(path.name.split("_", 1)[1]))
+                except ValueError:
+                    pass
+    number = max(existing, default=0) + 1
+    out = OUT_ROOT / f"dagger_{number:03d}"
+    (out / "frames").mkdir(parents=True, exist_ok=False)
+    return out
 
 class Pilot(nn.Module):
     def __init__(self):
@@ -93,6 +111,7 @@ print()
 print("In Eden: Controls → Player 1 → Input Device = 'Xbox 360 Controller'")
 print("  (leave your Pro Controller unselected for Player 1)")
 print("Then focus the race and click L3 on the Pro Controller to start AI.")
+print("While AI drives, hold R and use the left stick to take over steering.")
 print("Tip: turn off Pause emulation when in background.")
 while True:
     pygame.event.pump()
@@ -108,20 +127,32 @@ try:
 except Exception:
     pass
 
-print("AI driving. Ctrl+C to stop.")
+out = next_dagger_dir()
+labels_file = (out / "labels.csv").open("w", newline="")
+labels = csv.writer(labels_file)
+labels.writerow(["index", "t", "steer", "model_steer", "throttle", "drift", "intervention"])
+correction_index = 0
+started_at = time.time()
+
+print(f"AI driving. Corrections will be saved to {out}. Ctrl+C to stop.")
 
 try:
     next_t = time.perf_counter()
     while True:
+        pygame.event.pump()
         raw = sct.grab(MONITOR)
         img = Image.frombytes("RGB", raw.size, raw.bgra, "raw", "BGRX")
         img = img.crop(CROP)
         x = tfm(img).unsqueeze(0).to(device)
         with torch.no_grad():
-            steer = float(model(x).item())
-        if not math.isfinite(steer):
-            steer = 0.0
-        steer = max(-1.0, min(1.0, steer))
+            model_steer = float(model(x).item())
+        if not math.isfinite(model_steer):
+            model_steer = 0.0
+        model_steer = max(-1.0, min(1.0, model_steer))
+
+        intervening = bool(joy.get_button(TAKEOVER_BTN))
+        expert_steer = max(-1.0, min(1.0, float(joy.get_axis(0))))
+        steer = expert_steer if intervening else model_steer
 
         # Xbox B → Switch A (throttle). Release Xbox A so Switch B (brake) stays up.
         pad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
@@ -129,7 +160,27 @@ try:
         pad.left_joystick_float(x_value_float=steer, y_value_float=0.0)
         pad.update()
 
-        print(f"\rsteer {steer:+.2f}", end="", flush=True)
+        if intervening:
+            img.save(out / "frames" / f"{correction_index:06d}.png", optimize=False)
+            labels.writerow([
+                correction_index,
+                f"{time.time() - started_at:.4f}",
+                f"{expert_steer:.4f}",
+                f"{model_steer:.4f}",
+                1,
+                0,
+                1,
+            ])
+            correction_index += 1
+            if correction_index % 15 == 0:
+                labels_file.flush()
+
+        driver = "HUMAN" if intervening else "AI   "
+        print(
+            f"\r{driver} steer {steer:+.2f}  corrections {correction_index}",
+            end="",
+            flush=True,
+        )
 
         next_t += dt
         sleep = next_t - time.perf_counter()
@@ -138,6 +189,8 @@ try:
         else:
             next_t = time.perf_counter()
 except KeyboardInterrupt:
+    print(f"\nstopped; saved {correction_index} corrections to {out}")
+finally:
     pad.reset()
     pad.update()
-    print("\nstopped")
+    labels_file.close()

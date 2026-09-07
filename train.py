@@ -43,9 +43,18 @@ class Runs(Dataset):
         y = torch.tensor([steer], dtype=torch.float32)
         return x, y
 
-all_runs = sorted(p for p in DATA.iterdir() if p.is_dir() and p.name.startswith("run_"))
-train_runs = [p for p in all_runs if p.name not in VAL_RUNS]
-val_runs = [p for p in all_runs if p.name in VAL_RUNS]
+all_runs = sorted(
+    p
+    for p in DATA.iterdir()
+    if p.is_dir() and (p.name.startswith("run_") or p.name.startswith("dagger_"))
+)
+# DAgger corrections are always training data. Validation remains limited to
+# complete human-driven runs so sparse interventions cannot leak into it.
+train_runs = [
+    p for p in all_runs
+    if p.name.startswith("dagger_") or p.name not in VAL_RUNS
+]
+val_runs = [p for p in all_runs if p.name.startswith("run_") and p.name in VAL_RUNS]
 print("train", [p.name for p in train_runs])
 print("val", [p.name for p in val_runs])
 
@@ -101,7 +110,7 @@ for epoch in range(1, EPOCHS + 1):
     with torch.no_grad():
         for x, y in val_dl:
             x, y = x.to(device), y.to(device)
-            va += weighted_mse(model(x), y).item() * x.size(0)
+            va += loss_fn(model(x), y).item() * x.size(0)
     va /= max(len(val_ds), 1)
     print(f"epoch {epoch:02d}  train {tr:.4f}  val {va:.4f}")
     if va < best:

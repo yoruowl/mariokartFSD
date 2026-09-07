@@ -2,3 +2,6 @@ dataset/
 pilot_best.pt
 
 __pycache__/play.cpython-314.pyc
+__pycache__/buttonindices.cpython-314.pyc
+__pycache__/recording.cpython-314.pyc
+__pycache__/train.cpython-314.pyc
