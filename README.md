@@ -1,0 +1,1 @@
+use '.\.venv\Scripts\Activate.ps1' to activate the python virtual env on windows
