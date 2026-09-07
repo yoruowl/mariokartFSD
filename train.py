@@ -80,10 +80,7 @@ class Pilot(nn.Module):
 
 model = Pilot().to(device)
 opt = torch.optim.Adam(model.parameters(), lr=LR)
-
-def weighted_mse(pred, y):
-    w = 1.0 + 4.0 * y.abs()
-    return (w * (pred - y).pow(2)).mean()
+loss_fn = nn.MSELoss()
 
 best = 1e9
 for epoch in range(1, EPOCHS + 1):
@@ -92,7 +89,7 @@ for epoch in range(1, EPOCHS + 1):
     for x, y in train_dl:
         x, y = x.to(device), y.to(device)
         pred = model(x)
-        loss = weighted_mse(pred, y)
+        loss = loss_fn(pred, y)
         opt.zero_grad()
         loss.backward()
         opt.step()
